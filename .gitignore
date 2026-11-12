@@ -1,0 +1,42 @@
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest and testing caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Model Weights (auto-downloaded by Ultralytics)
+*.pt
+*.pth
+*.onnx
+*.engine
+
+# Video Media Files (prevent repo bloat)
+*.mp4
+*.avi
+*.webm
+*.mov
+*.mkv
+
+# Run Output Artifacts
+output/
+output_*/
+*.log
+
+# IDE & OS metadata
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
