@@ -15,7 +15,7 @@ VisionTrack is an end-to-end, production-grade computer vision pipeline designed
 
 ---
 
-## 🏛 System Architecture
+## System Architecture
 
 The pipeline is organized into six modular subsystems:
 
@@ -43,64 +43,110 @@ flowchart TD
 
 ---
 
-## 📐 Mathematical Formulations
+## Mathematical Formulations
 
 ### 1. Perspective Homography Transformation
 The planar homography relates 2D image pixel coordinates $\mathbf{x} = [u, v, 1]^T$ to real-world ground metric coordinates $\mathbf{X} = [X, Y, 1]^T$ through an invertible $3 \times 3$ projective matrix $\mathbf{H}$:
 
-$$\begin{pmatrix} X' \\ Y' \\ W' \end{pmatrix} = \mathbf{H} \begin{pmatrix} u \\ v \\ 1 \end{pmatrix} = \begin{pmatrix} h_{11} & h_{12} & h_{13} \\ h_{21} & h_{22} & h_{23} \\ h_{31} & h_{32} & h_{33} \end{pmatrix} \begin{pmatrix} u \\ v \\ 1 \end{pmatrix}$$
+$$
+\begin{pmatrix} X' \\ Y' \\ W' \end{pmatrix} = \mathbf{H} \begin{pmatrix} u \\ v \\ 1 \end{pmatrix} = \begin{pmatrix}
+h_{11} & h_{12} & h_{13} \\
+h_{21} & h_{22} & h_{23} \\
+h_{31} & h_{32} & h_{33}
+\end{pmatrix} \begin{pmatrix} u \\ v \\ 1 \end{pmatrix}
+$$
 
 The inhomogeneous real-world Cartesian ground coordinates (in meters) are obtained by dividing by the projective scale factor $W'$:
 
-$$X = \frac{X'}{W'} = \frac{h_{11} u + h_{12} v + h_{13}}{h_{31} u + h_{32} v + h_{33}}, \quad Y = \frac{Y'}{W'} = \frac{h_{21} u + h_{22} v + h_{23}}{h_{31} u + h_{32} v + h_{33}}$$
+$$
+X = \frac{X'}{W'} = \frac{h_{11} u + h_{12} v + h_{13}}{h_{31} u + h_{32} v + h_{33}}, \qquad Y = \frac{Y'}{W'} = \frac{h_{21} u + h_{22} v + h_{23}}{h_{31} u + h_{32} v + h_{33}}
+$$
 
 Given four non-collinear image coordinate points $(u_i, v_i)$ and their corresponding known ground metric coordinates $(X_i, Y_i)$ ($i \in \{1, 2, 3, 4\}$), $\mathbf{H}$ is solved via Singular Value Decomposition (SVD) through OpenCV's `cv2.getPerspectiveTransform()`.
 
 ### 2. Ground Contact Point (Foot-Point) Extraction
 Because bounding boxes enclose 3D vehicle or pedestrian volumes in a 2D perspective view, the top and centroid of the box suffer severe parallax error. The actual ground contact occurs at the bottom center of the bounding box:
 
-$$x_c = \frac{x_1 + x_2}{2}, \quad y_c = y_2$$
+$$
+x_c = \frac{x_1 + x_2}{2}, \qquad y_c = y_2
+$$
 
 This $(x_c, y_c)$ pixel coordinate is mapped to $(X, Y)$ on the ground plane.
 
 ### 3. Recursive Bayesian State Estimation (Metric Ground-Plane Kalman Filter)
 To eliminate detector bounding-box jitter and handle temporary occlusions, VisionTrack implements a 2D Constant Velocity (CV) Kalman Filter formulated directly in metric physical space (meters and meters/second):
 
-$$\mathbf{x}_k = \begin{bmatrix} X & Y & \dot{X} & \dot{Y} \end{bmatrix}^T \in \mathbb{R}^4$$
+$$
+\mathbf{x}_k = \begin{bmatrix} X & Y & \dot{X} & \dot{Y} \end{bmatrix}^T \in \mathbb{R}^4
+$$
 
 **State Transition Model:**
-$$\mathbf{F}(\Delta t) = \begin{bmatrix} 1 & 0 & \Delta t & 0 \\ 0 & 1 & 0 & \Delta t \\ 0 & 0 & 1 & 0 \\ 0 & 0 & 0 & 1 \end{bmatrix}, \qquad \mathbf{H}_{\text{meas}} = \begin{bmatrix} 1 & 0 & 0 & 0 \\ 0 & 1 & 0 & 0 \end{bmatrix}$$
+
+$$
+\mathbf{F}(\Delta t) = \begin{bmatrix}
+1 & 0 & \Delta t & 0 \\
+0 & 1 & 0 & \Delta t \\
+0 & 0 & 1 & 0 \\
+0 & 0 & 0 & 1
+\end{bmatrix}, \qquad
+\mathbf{H}_{\text{meas}} = \begin{bmatrix}
+1 & 0 & 0 & 0 \\
+0 & 1 & 0 & 0
+\end{bmatrix}
+$$
 
 **Continuous White Noise Acceleration (CWNA) Process Noise $\mathbf{Q}(\Delta t)$:**
-$$\mathbf{Q} = \begin{bmatrix} \frac{\Delta t^4}{4} & 0 & \frac{\Delta t^3}{2} & 0 \\ 0 & \frac{\Delta t^4}{4} & 0 & \frac{\Delta t^3}{2} \\ \frac{\Delta t^3}{2} & 0 & \Delta t^2 & 0 \\ 0 & \frac{\Delta t^3}{2} & 0 & \Delta t^2 \end{bmatrix} \sigma_a^2$$
+
+$$
+\mathbf{Q} = \begin{bmatrix}
+\frac{\Delta t^4}{4} & 0 & \frac{\Delta t^3}{2} & 0 \\
+0 & \frac{\Delta t^4}{4} & 0 & \frac{\Delta t^3}{2} \\
+\frac{\Delta t^3}{2} & 0 & \Delta t^2 & 0 \\
+0 & \frac{\Delta t^3}{2} & 0 & \Delta t^2
+\end{bmatrix} \sigma_a^2
+$$
 
 **Predict-Update Recursion with Joseph-Form Stability:**
-$$\mathbf{x}_{k|k-1} = \mathbf{F} \mathbf{x}_{k-1|k-1}, \quad \mathbf{P}_{k|k-1} = \mathbf{F} \mathbf{P}_{k-1|k-1} \mathbf{F}^T + \mathbf{Q}$$
-$$\mathbf{K}_k = \mathbf{P}_{k|k-1} \mathbf{H}_{\text{meas}}^T (\mathbf{H}_{\text{meas}} \mathbf{P}_{k|k-1} \mathbf{H}_{\text{meas}}^T + \mathbf{R})^{-1}$$
-$$\mathbf{x}_{k|k} = \mathbf{x}_{k|k-1} + \mathbf{K}_k (\mathbf{z}_k - \mathbf{H}_{\text{meas}} \mathbf{x}_{k|k-1})$$
-$$\mathbf{P}_{k|k} = (\mathbf{I} - \mathbf{K}_k \mathbf{H}_{\text{meas}}) \mathbf{P}_{k|k-1} (\mathbf{I} - \mathbf{K}_k \mathbf{H}_{\text{meas}})^T + \mathbf{K}_k \mathbf{R} \mathbf{K}_k^T$$
+
+$$
+\begin{aligned}
+\mathbf{x}_{k|k-1} &= \mathbf{F} \mathbf{x}_{k-1|k-1} \\
+\mathbf{P}_{k|k-1} &= \mathbf{F} \mathbf{P}_{k-1|k-1} \mathbf{F}^T + \mathbf{Q} \\
+\mathbf{K}_k &= \mathbf{P}_{k|k-1} \mathbf{H}_{\text{meas}}^T (\mathbf{H}_{\text{meas}} \mathbf{P}_{k|k-1} \mathbf{H}_{\text{meas}}^T + \mathbf{R})^{-1} \\
+\mathbf{x}_{k|k} &= \mathbf{x}_{k|k-1} + \mathbf{K}_k (\mathbf{z}_k - \mathbf{H}_{\text{meas}} \mathbf{x}_{k|k-1}) \\
+\mathbf{P}_{k|k} &= (\mathbf{I} - \mathbf{K}_k \mathbf{H}_{\text{meas}}) \mathbf{P}_{k|k-1} (\mathbf{I} - \mathbf{K}_k \mathbf{H}_{\text{meas}})^T + \mathbf{K}_k \mathbf{R} \mathbf{K}_k^T
+\end{aligned}
+$$
 
 ### 4. Euclidean Velocity, Acceleration & Heading Angle
 Filtered velocity components yield scalar ground speed:
 
-$$v_{\text{mps}, t} = \sqrt{\dot{X}_t^2 + \dot{Y}_t^2} \quad [\text{m/s}], \qquad v_{\text{km/h}, t} = v_{\text{mps}, t} \times 3.6 \quad [\text{km/h}]$$
+$$
+v_{\text{mps}, t} = \sqrt{\dot{X}_t^2 + \dot{Y}_t^2} \quad [\text{m/s}], \qquad v_{\text{km/h}, t} = v_{\text{mps}, t} \times 3.6 \quad [\text{km/h}]
+$$
 
 Acceleration is computed from the filtered speed sequence:
 
-$$a_t = \frac{v_{\text{mps}, t} - v_{\text{mps}, t-1}}{\Delta t} \quad [\text{m/s}^2]$$
+$$
+a_t = \frac{v_{\text{mps}, t} - v_{\text{mps}, t-1}}{\Delta t} \quad [\text{m/s}^2]
+$$
 
 The instantaneous movement direction angle $\theta \in [0^\circ, 360^\circ)$ relative to the ground coordinate axis is computed via:
 
-$$\theta_t = \left(\text{atan2}(\dot{Y}_t, \dot{X}_t) \cdot \frac{180}{\pi} + 360^\circ\right) \pmod{360^\circ}$$
+$$
+\theta_t = \left(\text{atan2}(\dot{Y}_t, \dot{X}_t) \cdot \frac{180}{\pi} + 360^\circ\right) \pmod{360^\circ}
+$$
 
 ### 5. Savitzky-Golay Kinematic Smoothing (Fallback Mode)
 When running with `--no-kalman`, a Savitzky-Golay digital filter convolves local successive subsets of $2m + 1$ adjacent data points with a low-degree polynomial by least-squares convolution:
 
-$$v_{\text{smoothed}, t} = \sum_{j=-m}^m w_j \cdot v_{\text{raw}, t+j}$$
+$$
+v_{\text{smoothed}, t} = \sum_{j=-m}^m w_j \cdot v_{\text{raw}, t+j}
+$$
 
 ---
 
-## 📦 Installation
+## Installation
 
 ### 1. Clone & Set Up Virtual Environment
 
@@ -122,7 +168,7 @@ pip install -r requirements.txt
 
 ---
 
-## 🚀 Quickstart & Usage
+## Quickstart & Usage
 
 ### 1. Interactive 4-Point Homography Calibration
 To calibrate a new camera angle, run with `--calibrate`:
@@ -197,7 +243,7 @@ python3 main.py \
 
 ---
 
-## 📊 Output Artifacts & Dataset Schemas
+## Output Artifacts and Dataset Schemas
 
 VisionTrack automatically saves all analytics to `--output-dir` (`output/` by default).
 
@@ -261,7 +307,7 @@ High-resolution 2D occupancy map with Gaussian smoothing and Matplotlib colormap
 
 ---
 
-## 🧪 Testing & Verification
+## Testing and Verification
 
 The suite includes **16 comprehensive automated tests** covering homography projection, inverse mapping, Kalman filter state prediction, covariance contraction, Gaussian noise rejection, occlusion coasting, CSV schema conformance, and heatmap generation:
 
@@ -291,7 +337,7 @@ tests/test_visualizer.py::test_visualizer_render PASSED                  [100%]
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 visionTrack/
@@ -330,5 +376,5 @@ visionTrack/
 
 ---
 
-## 📄 License
+## License
 This project is open-source and distributed under the MIT License.
