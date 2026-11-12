@@ -7,6 +7,10 @@
 [![Tests: 16 Passed](https://img.shields.io/badge/Tests-16%20Passed-brightgreen.svg)](tests/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
+<p align="center">
+  <img src="assets/demo.gif" alt="VisionTrack Multi-Object Tracking & Kinematics Demo" width="850">
+</p>
+
 VisionTrack is an end-to-end, production-grade computer vision pipeline designed for intelligent transportation systems (ITS), traffic monitoring, and pedestrian trajectory analysis. It ingests video streams (MP4/AVI files, RTSP streams, or live webcams), performs robust multi-class detection and tracking with persistent track IDs, projects image coordinates to metric real-world ground coordinates via perspective homography, computes optimal smoothed kinematic parameters (velocity, acceleration, heading, cumulative distance) via a **2D Metric Ground-Plane Kalman Filter**, renders dynamic visual analytics (fading motion trails, telemetry tags, and 2D spatial occupancy heatmaps), and exports structured tabular datasets.
 
 ---
@@ -251,6 +255,10 @@ Compiled high-level analytics containing class distributions, speeds, and per-tr
 ### 3. Spatial Density Heatmap (`output/heatmap.png`)
 High-resolution 2D occupancy map with Gaussian smoothing and Matplotlib colormap (`inferno`/`turbo`) displaying spatial trajectory density across the scene.
 
+<p align="center">
+  <img src="assets/heatmap_preview.png" alt="Spatial Density Heatmap" width="850">
+</p>
+
 ---
 
 ## 🧪 Testing & Verification
@@ -287,6 +295,10 @@ tests/test_visualizer.py::test_visualizer_render PASSED                  [100%]
 
 ```
 visionTrack/
+├── assets/                       # Visual banners, demo GIFs, and preview screenshots
+│   ├── demo.gif                  # Real-time tracking animation preview
+│   ├── tracking_preview.jpg      # High-resolution detection & kinematics snapshot
+│   └── heatmap_preview.png       # 2D spatial trajectory density heatmap
 ├── calibration.json              # Default / sample ground calibration parameters
 ├── calibration_city.json         # Urban multi-lane road calibration profile
 ├── calibration_traffic.json      # Highway lane calibration profile
